@@ -23,19 +23,102 @@
 // SOFTWARE.
 
 @_exported import HTTP
-@_exported import MediaTypeParserCollection
-@_exported import MediaTypeSerializerCollection
+@_exported import MediaType
 
-public final class ServerContentNegotiationMiddleware: MiddlewareType {
-    public let parsers: MediaTypeParserCollection
-    public let serializers: MediaTypeSerializerCollection
+public final class ContentNegotiationMiddleware: MiddlewareType {
+    public let mediaTypes: [MediaType]
+    public let mode: Mode
 
-    public init(parsers: MediaTypeParserCollection, serializers: MediaTypeSerializerCollection) {
-        self.parsers = parsers
-        self.serializers = serializers
+    public enum Mode {
+        case Server
+        case Client
+    }
+
+    public enum Error: ErrorType {
+        case NoSuitableParser
+        case NoSuitableSerializer
+        case MediaTypeNotFound
+    }
+
+    public init(mediaTypes: MediaType..., mode: Mode = .Server) {
+        self.mediaTypes = mediaTypes
+        self.mode = mode
+    }
+
+    public func parsersFor(mediaType: MediaType) -> [(MediaType, InterchangeDataParser)] {
+        return mediaTypes.reduce([]) {
+            if let serializer = $1.parser where $1.matches(mediaType) {
+                return $0 + [($1, serializer)]
+            } else {
+                return $0
+            }
+        }
+    }
+
+    public func parse(data: Data, mediaType: MediaType) throws -> (MediaType, InterchangeData) {
+        var lastError: ErrorType?
+
+        for (mediaType, parser) in parsersFor(mediaType) {
+            do {
+                return try (mediaType, parser.parse(data))
+            } catch {
+                lastError = error
+                continue
+            }
+        }
+
+        if let lastError = lastError {
+            throw lastError
+        } else {
+            throw Error.NoSuitableParser
+        }
+    }
+
+    func serializersFor(mediaType: MediaType) -> [(MediaType, InterchangeDataSerializer)] {
+        return mediaTypes.reduce([]) {
+            if let serializer = $1.serializer where $1.matches(mediaType) {
+                return $0 + [($1, serializer)]
+            } else {
+                return $0
+            }
+        }
+    }
+
+    public func serialize(data: InterchangeData) throws -> (MediaType, Data) {
+        return try serialize(data, mediaTypes: mediaTypes)
+    }
+
+    func serialize(data: InterchangeData, mediaTypes: [MediaType]) throws -> (MediaType, Data) {
+        var lastError: ErrorType?
+
+        for acceptedType in mediaTypes {
+            for (mediaType, serializer) in serializersFor(acceptedType) {
+                do {
+                    return try (mediaType, serializer.serialize(data))
+                } catch {
+                    lastError = error
+                    continue
+                }
+            }
+        }
+
+        if let lastError = lastError {
+            throw lastError
+        } else {
+            throw Error.NoSuitableSerializer
+        }
     }
 
     public func respond(request: Request, chain: ChainType) throws -> Response {
+        switch mode {
+        case .Server:
+            return try respondServer(request, chain: chain)
+        case .Client:
+            return try respondClient(request, chain: chain)
+        }
+    }
+
+    public func respondServer(request: Request, chain: ChainType) throws -> Response {
         var request = request
 
         guard case .Buffer(let body) = request.body else {
@@ -44,9 +127,9 @@ public final class ServerContentNegotiationMiddleware: MiddlewareType {
 
         if let contentType = request.contentType {
             do {
-                let (_, content) = try parsers.parse(body, mediaType: contentType)
+                let (_, content) = try parse(body, mediaType: contentType)
                 request.content = content
-            } catch MediaTypeParserCollectionError.NoSuitableParser {
+            } catch Error.NoSuitableParser {
                 return Response(status: .UnsupportedMediaType)
             } catch {
                 return Response(status: .BadRequest)
@@ -57,12 +140,12 @@ public final class ServerContentNegotiationMiddleware: MiddlewareType {
 
         if let content = response.content {
             do {
-                let mediaTypes = request.accept.count > 0 ? request.accept : serializers.mediaTypes
-                let (mediaType, body) = try serializers.serialize(content, mediaTypes: mediaTypes)
+                let mediaTypes = request.accept.count > 0 ? request.accept : self.mediaTypes
+                let (mediaType, body) = try serialize(content, mediaTypes: mediaTypes)
                 response.contentType = mediaType
                 response.body = .Buffer(body)
                 response.contentLength = body.count
-            } catch MediaTypeSerializerCollectionError.NoSuitableSerializer {
+            } catch Error.NoSuitableSerializer {
                 return Response(status: .NotAcceptable)
             } catch {
                 return Response(status: .InternalServerError)
@@ -71,26 +154,14 @@ public final class ServerContentNegotiationMiddleware: MiddlewareType {
 
         return response
     }
-}
 
-public final class ClientContentNegotiatonMiddleware: MiddlewareType {
-    public let parsers: MediaTypeParserCollection
-    public let serializers: MediaTypeSerializerCollection
-    public let mediaTypes: [MediaType]
-
-    public init(parsers: MediaTypeParserCollection, serializers: MediaTypeSerializerCollection, mediaTypes: MediaType...) {
-        self.parsers = parsers
-        self.serializers = serializers
-        self.mediaTypes = mediaTypes
-    }
-
-    public func respond(request: Request, chain: ChainType) throws -> Response {
+    public func respondClient(request: Request, chain: ChainType) throws -> Response {
         var request = request
 
-        request.accept = parsers.mediaTypes
+        request.accept = mediaTypes
 
         if let content = request.content {
-            let (mediaType, body) = try serializers.serialize(content, mediaTypes: mediaTypes)
+            let (mediaType, body) = try serialize(content)
             request.contentType = mediaType
             request.body = .Buffer(body)
             request.contentLength = body.count
@@ -103,11 +174,53 @@ public final class ClientContentNegotiatonMiddleware: MiddlewareType {
         }
 
         if let contentType = response.contentType {
-            let (_, content) = try parsers.parse(body, mediaType: contentType)
+            let (_, content) = try parse(body, mediaType: contentType)
             response.content = content
         }
 
         return response
+    }
+}
+
+public protocol ContentMappable {
+    init(content: InterchangeData) throws
+    static var key: String { get }
+}
+
+extension ContentMappable {
+    public static var key: String {
+        return String(reflecting: self)
+    }
+}
+
+public protocol ContentConvertible {
+    var content: InterchangeData { get }
+}
+
+public final class ContentMapperMiddleware: MiddlewareType {
+    let type: ContentMappable.Type
+
+    public init(mappingTo type: ContentMappable.Type) {
+        self.type = type
+    }
+
+    public func respond(request: Request, chain: ChainType) throws -> Response {
+        guard let content = request.content else {
+            return try chain.proceed(request)
+        }
+
+        var request = request
+
+        do {
+            let target = try type.init(content: content)
+            request.storage[type.key] = target
+        } catch InterchangeData.Error.IncompatibleType {
+            return Response(status: .BadRequest)
+        } catch {
+            throw error
+        }
+
+        return try chain.proceed(request)
     }
 }
 
@@ -118,7 +231,7 @@ extension Request {
         }
 
         get {
-            return storage["content"] as? InterchangeData ?? nil
+            return storage["content"] as? InterchangeData
         }
     }
 
@@ -133,6 +246,18 @@ extension Request {
 
         self.content = content
     }
+
+    public init(method: Method, uri: URI, headers: Headers = [:], content convertible: ContentConvertible, upgrade: Upgrade? = nil) {
+        self.init(
+            method: method,
+            uri: uri,
+            headers: headers,
+            body: nil,
+            upgrade: upgrade
+        )
+
+        self.content = convertible.content
+    }
 }
 
 extension Response {
@@ -142,7 +267,7 @@ extension Response {
         }
 
         get {
-            return storage["content"] as? InterchangeData ?? nil
+            return storage["content"] as? InterchangeData
         }
     }
 
@@ -155,5 +280,16 @@ extension Response {
         )
 
         self.content = content
+    }
+
+    public init(status: Status = .OK, headers: Headers = [:], content convertible: ContentConvertible, upgrade: Upgrade? = nil) {
+        self.init(
+            status: status,
+            headers: headers,
+            body: nil,
+            upgrade: upgrade
+        )
+
+        self.content = convertible.content
     }
 }
