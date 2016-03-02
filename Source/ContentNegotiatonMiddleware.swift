@@ -235,7 +235,7 @@ extension Request {
         }
     }
 
-    public init(method: Method, uri: URI, headers: Headers = [:], content: InterchangeData, upgrade: Upgrade? = nil) {
+    public init(method: Method = .GET, uri: URI = URI(path: "/"), headers: Headers = [:], content: InterchangeData, upgrade: Upgrade? = nil) {
         self.init(
             method: method,
             uri: uri,
@@ -247,7 +247,7 @@ extension Request {
         self.content = content
     }
 
-    public init(method: Method, uri: URI, headers: Headers = [:], content convertible: ContentConvertible, upgrade: Upgrade? = nil) {
+    public init(method: Method = .GET, uri: URI = URI(path: "/"), headers: Headers = [:], content convertible: ContentConvertible, upgrade: Upgrade? = nil) {
         self.init(
             method: method,
             uri: uri,
