@@ -25,6 +25,10 @@
 @_exported import HTTP
 @_exported import MediaType
 
+public typealias Content = InterchangeData
+public typealias ContentParser = InterchangeDataParser
+public typealias ContentSerializer = InterchangeDataSerializer
+
 public final class ContentNegotiationMiddleware: MiddlewareType {
     public let mediaTypes: [MediaType]
     public let mode: Mode
@@ -45,7 +49,7 @@ public final class ContentNegotiationMiddleware: MiddlewareType {
         self.mode = mode
     }
 
-    public func parsersFor(mediaType: MediaType) -> [(MediaType, InterchangeDataParser)] {
+    public func parsersFor(mediaType: MediaType) -> [(MediaType, ContentParser)] {
         return mediaTypes.reduce([]) {
             if let serializer = $1.parser where $1.matches(mediaType) {
                 return $0 + [($1, serializer)]
@@ -55,7 +59,7 @@ public final class ContentNegotiationMiddleware: MiddlewareType {
         }
     }
 
-    public func parse(data: Data, mediaType: MediaType) throws -> (MediaType, InterchangeData) {
+    public func parse(data: Data, mediaType: MediaType) throws -> (MediaType, Content) {
         var lastError: ErrorType?
 
         for (mediaType, parser) in parsersFor(mediaType) {
@@ -74,7 +78,7 @@ public final class ContentNegotiationMiddleware: MiddlewareType {
         }
     }
 
-    func serializersFor(mediaType: MediaType) -> [(MediaType, InterchangeDataSerializer)] {
+    func serializersFor(mediaType: MediaType) -> [(MediaType, ContentSerializer)] {
         return mediaTypes.reduce([]) {
             if let serializer = $1.serializer where $1.matches(mediaType) {
                 return $0 + [($1, serializer)]
@@ -84,17 +88,17 @@ public final class ContentNegotiationMiddleware: MiddlewareType {
         }
     }
 
-    public func serialize(data: InterchangeData) throws -> (MediaType, Data) {
-        return try serialize(data, mediaTypes: mediaTypes)
+    public func serialize(content: Content) throws -> (MediaType, Data) {
+        return try serialize(content, mediaTypes: mediaTypes)
     }
 
-    func serialize(data: InterchangeData, mediaTypes: [MediaType]) throws -> (MediaType, Data) {
+    func serialize(content: Content, mediaTypes: [MediaType]) throws -> (MediaType, Data) {
         var lastError: ErrorType?
 
         for acceptedType in mediaTypes {
             for (mediaType, serializer) in serializersFor(acceptedType) {
                 do {
-                    return try (mediaType, serializer.serialize(data))
+                    return try (mediaType, serializer.serialize(content))
                 } catch {
                     lastError = error
                     continue
@@ -183,7 +187,7 @@ public final class ContentNegotiationMiddleware: MiddlewareType {
 }
 
 public protocol ContentMappable {
-    init(content: InterchangeData) throws
+    init(content: Content) throws
     static var key: String { get }
 }
 
@@ -194,7 +198,23 @@ extension ContentMappable {
 }
 
 public protocol ContentConvertible {
-    var content: InterchangeData { get }
+    var content: Content { get }
+}
+
+extension ContentConvertible {
+    static func toContent(convertible: Self) -> Content {
+        return convertible.content
+    }
+}
+
+extension CollectionType where Self.Generator.Element: ContentConvertible {
+    public var contents: [Content] {
+        return map(Self.Generator.Element.toContent)
+    }
+
+    public var content: Content {
+        return Content.from(contents)
+    }
 }
 
 public final class ContentMapperMiddleware: MiddlewareType {
@@ -214,7 +234,7 @@ public final class ContentMapperMiddleware: MiddlewareType {
         do {
             let target = try type.init(content: content)
             request.storage[type.key] = target
-        } catch InterchangeData.Error.IncompatibleType {
+        } catch Content.Error.IncompatibleType {
             return Response(status: .BadRequest)
         } catch {
             throw error
@@ -225,17 +245,17 @@ public final class ContentMapperMiddleware: MiddlewareType {
 }
 
 extension Request {
-    public var content: InterchangeData? {
+    public var content: Content? {
         set {
             storage["content"] = newValue
         }
 
         get {
-            return storage["content"] as? InterchangeData
+            return storage["content"] as? Content
         }
     }
 
-    public init(method: Method = .GET, uri: URI = URI(path: "/"), headers: Headers = [:], content: InterchangeData, upgrade: Upgrade? = nil) {
+    public init(method: Method = .GET, uri: URI = URI(path: "/"), headers: Headers = [:], content: Content, upgrade: Upgrade? = nil) {
         self.init(
             method: method,
             uri: uri,
@@ -261,17 +281,17 @@ extension Request {
 }
 
 extension Response {
-    public var content: InterchangeData? {
+    public var content: Content? {
         set {
             storage["content"] = newValue
         }
 
         get {
-            return storage["content"] as? InterchangeData
+            return storage["content"] as? Content
         }
     }
 
-    public init(status: Status = .OK, headers: Headers = [:], content: InterchangeData, upgrade: Upgrade? = nil) {
+    public init(status: Status = .OK, headers: Headers = [:], content: Content, upgrade: Upgrade? = nil) {
         self.init(
             status: status,
             headers: headers,
