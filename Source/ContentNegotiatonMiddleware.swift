@@ -29,7 +29,7 @@ public typealias Content = InterchangeData
 public typealias ContentParser = InterchangeDataParser
 public typealias ContentSerializer = InterchangeDataSerializer
 
-public final class ContentNegotiationMiddleware: MiddlewareType {
+public struct ContentNegotiationMiddleware: MiddlewareType {
     public let mediaTypes: [MediaType]
     public let mode: Mode
 
@@ -44,7 +44,7 @@ public final class ContentNegotiationMiddleware: MiddlewareType {
         case MediaTypeNotFound
     }
 
-    public init(mediaTypes: MediaType..., mode: Mode = .Server) {
+    public init(mediaTypes: [MediaType], mode: Mode = .Server) {
         self.mediaTypes = mediaTypes
         self.mode = mode
     }
@@ -202,7 +202,7 @@ public protocol ContentConvertible {
 }
 
 extension ContentConvertible {
-    static func toContent(convertible: Self) -> Content {
+    public static func toContent(convertible: Self) -> Content {
         return convertible.content
     }
 }
@@ -217,7 +217,7 @@ extension CollectionType where Self.Generator.Element: ContentConvertible {
     }
 }
 
-public final class ContentMapperMiddleware: MiddlewareType {
+public struct ContentMapperMiddleware: MiddlewareType {
     let type: ContentMappable.Type
 
     public init(mappingTo type: ContentMappable.Type) {
