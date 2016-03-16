@@ -38,7 +38,7 @@ public struct ContentNegotiationMiddleware: MiddlewareType {
         case Client
     }
 
-    public enum Error: ErrorType {
+    public enum Error: ErrorProtocol {
         case NoSuitableParser
         case NoSuitableSerializer
         case MediaTypeNotFound
@@ -60,7 +60,7 @@ public struct ContentNegotiationMiddleware: MiddlewareType {
     }
 
     public func parse(data: Data, mediaType: MediaType) throws -> (MediaType, Content) {
-        var lastError: ErrorType?
+        var lastError: ErrorProtocol?
 
         for (mediaType, parser) in parsersFor(mediaType) {
             do {
@@ -93,7 +93,7 @@ public struct ContentNegotiationMiddleware: MiddlewareType {
     }
 
     func serialize(content: Content, mediaTypes: [MediaType]) throws -> (MediaType, Data) {
-        var lastError: ErrorType?
+        var lastError: ErrorProtocol?
 
         for acceptedType in mediaTypes {
             for (mediaType, serializer) in serializersFor(acceptedType) {
@@ -207,9 +207,9 @@ extension ContentConvertible {
     }
 }
 
-extension CollectionType where Self.Generator.Element: ContentConvertible {
+extension Collection where Self.Iterator.Element: ContentConvertible {
     public var contents: [Content] {
-        return map(Self.Generator.Element.toContent)
+        return map(Self.Iterator.Element.toContent)
     }
 
     public var content: Content {
