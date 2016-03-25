@@ -23,28 +23,27 @@
 // SOFTWARE.
 
 @_exported import HTTP
-@_exported import MediaType
 
 public typealias Content = InterchangeData
 public typealias ContentParser = InterchangeDataParser
 public typealias ContentSerializer = InterchangeDataSerializer
 
-public struct ContentNegotiationMiddleware: MiddlewareType {
+public struct ContentNegotiationMiddleware: Middleware {
     public let mediaTypes: [MediaType]
     public let mode: Mode
 
     public enum Mode {
-        case Server
-        case Client
+        case server
+        case client
     }
 
     public enum Error: ErrorProtocol {
-        case NoSuitableParser
-        case NoSuitableSerializer
-        case MediaTypeNotFound
+        case noSuitableParser
+        case noSuitableSerializer
+        case mediaTypeNotFound
     }
 
-    public init(mediaTypes: [MediaType], mode: Mode = .Server) {
+    public init(mediaTypes: [MediaType], mode: Mode = .server) {
         self.mediaTypes = mediaTypes
         self.mode = mode
     }
@@ -74,7 +73,7 @@ public struct ContentNegotiationMiddleware: MiddlewareType {
         if let lastError = lastError {
             throw lastError
         } else {
-            throw Error.NoSuitableParser
+            throw Error.noSuitableParser
         }
     }
 
@@ -109,57 +108,55 @@ public struct ContentNegotiationMiddleware: MiddlewareType {
         if let lastError = lastError {
             throw lastError
         } else {
-            throw Error.NoSuitableSerializer
+            throw Error.noSuitableSerializer
         }
     }
 
-    public func respond(request: Request, chain: ChainType) throws -> Response {
+    public func respond(request: Request, chain: Responder) throws -> Response {
         switch mode {
-        case .Server:
+        case .server:
             return try respondServer(request, chain: chain)
-        case .Client:
+        case .client:
             return try respondClient(request, chain: chain)
         }
     }
 
-    public func respondServer(request: Request, chain: ChainType) throws -> Response {
+    public func respondServer(request: Request, chain: Responder) throws -> Response {
         var request = request
 
-        guard case .Buffer(let body) = request.body else {
-            return try chain.proceed(request)
-        }
+        let body = request.buffer
 
         if let contentType = request.contentType {
             do {
                 let (_, content) = try parse(body, mediaType: contentType)
                 request.content = content
-            } catch Error.NoSuitableParser {
-                return Response(status: .UnsupportedMediaType)
+            } catch Error.noSuitableParser {
+                return Response(status: .unsupportedMediaType)
             } catch {
-                return Response(status: .BadRequest)
+                return Response(status: .badRequest)
             }
         }
 
-        var response = try chain.proceed(request)
+        var response = try chain.respond(request)
 
         if let content = response.content {
             do {
                 let mediaTypes = request.accept.count > 0 ? request.accept : self.mediaTypes
                 let (mediaType, body) = try serialize(content, mediaTypes: mediaTypes)
                 response.contentType = mediaType
-                response.body = .Buffer(body)
+                response.buffer = body
                 response.contentLength = body.count
-            } catch Error.NoSuitableSerializer {
-                return Response(status: .NotAcceptable)
+            } catch Error.noSuitableSerializer {
+                return Response(status: .notAcceptable)
             } catch {
-                return Response(status: .InternalServerError)
+                return Response(status: .internalServerError)
             }
         }
 
         return response
     }
 
-    public func respondClient(request: Request, chain: ChainType) throws -> Response {
+    public func respondClient(request: Request, chain: Responder) throws -> Response {
         var request = request
 
         request.accept = mediaTypes
@@ -167,15 +164,13 @@ public struct ContentNegotiationMiddleware: MiddlewareType {
         if let content = request.content {
             let (mediaType, body) = try serialize(content)
             request.contentType = mediaType
-            request.body = .Buffer(body)
+            request.buffer = body
             request.contentLength = body.count
         }
 
-        var response = try chain.proceed(request)
+        var response = try chain.respond(request)
 
-        guard case .Buffer(let body) = response.body else {
-            return response
-        }
+        let body = response.buffer
 
         if let contentType = response.contentType {
             let (_, content) = try parse(body, mediaType: contentType)
@@ -217,16 +212,16 @@ extension Collection where Self.Iterator.Element: ContentConvertible {
     }
 }
 
-public struct ContentMapperMiddleware: MiddlewareType {
+public struct ContentMapperMiddleware: Middleware {
     let type: ContentMappable.Type
 
     public init(mappingTo type: ContentMappable.Type) {
         self.type = type
     }
 
-    public func respond(request: Request, chain: ChainType) throws -> Response {
+    public func respond(request: Request, chain: Responder) throws -> Response {
         guard let content = request.content else {
-            return try chain.proceed(request)
+            return try chain.respond(request)
         }
 
         var request = request
@@ -234,45 +229,45 @@ public struct ContentMapperMiddleware: MiddlewareType {
         do {
             let target = try type.init(content: content)
             request.storage[type.key] = target
-        } catch Content.Error.IncompatibleType {
-            return Response(status: .BadRequest)
+        } catch Content.Error.incompatibleType {
+            return Response(status: .badRequest)
         } catch {
             throw error
         }
 
-        return try chain.proceed(request)
+        return try chain.respond(request)
     }
 }
 
 extension Request {
     public var content: Content? {
-        set {
-            storage["content"] = newValue
-        }
-
         get {
             return storage["content"] as? Content
         }
+
+        set(content) {
+            storage["content"] = content
+        }
     }
 
-    public init(method: Method = .GET, uri: URI = URI(path: "/"), headers: Headers = [:], content: Content, upgrade: Upgrade? = nil) {
+    public init(method: Method = .get, uri: URI = URI(path: "/"), headers: Headers = [:], content: Content, upgrade: Upgrade? = nil) {
         self.init(
             method: method,
             uri: uri,
             headers: headers,
-            body: nil,
+            body: [],
             upgrade: upgrade
         )
 
         self.content = content
     }
 
-    public init(method: Method = .GET, uri: URI = URI(path: "/"), headers: Headers = [:], content convertible: ContentConvertible, upgrade: Upgrade? = nil) {
+    public init(method: Method = .get, uri: URI = URI(path: "/"), headers: Headers = [:], content convertible: ContentConvertible, upgrade: Upgrade? = nil) {
         self.init(
             method: method,
             uri: uri,
             headers: headers,
-            body: nil,
+            body: [],
             upgrade: upgrade
         )
 
@@ -282,31 +277,31 @@ extension Request {
 
 extension Response {
     public var content: Content? {
-        set {
-            storage["content"] = newValue
-        }
-
         get {
             return storage["content"] as? Content
         }
+
+        set(content) {
+            storage["content"] = content
+        }
     }
 
-    public init(status: Status = .OK, headers: Headers = [:], content: Content, upgrade: Upgrade? = nil) {
+    public init(status: Status = .ok, headers: Headers = [:], content: Content, upgrade: Upgrade? = nil) {
         self.init(
             status: status,
             headers: headers,
-            body: nil,
+            body: [],
             upgrade: upgrade
         )
 
         self.content = content
     }
 
-    public init(status: Status = .OK, headers: Headers = [:], content convertible: ContentConvertible, upgrade: Upgrade? = nil) {
+    public init(status: Status = .ok, headers: Headers = [:], content convertible: ContentConvertible, upgrade: Upgrade? = nil) {
         self.init(
             status: status,
             headers: headers,
-            body: nil,
+            body: [],
             upgrade: upgrade
         )
 
