@@ -124,7 +124,7 @@ public struct ContentNegotiationMiddleware: Middleware {
     public func respondServer(request: Request, chain: Responder) throws -> Response {
         var request = request
 
-        let body = request.buffer
+        let body = request.body.buffer
 
         if let contentType = request.contentType {
             do {
@@ -144,7 +144,7 @@ public struct ContentNegotiationMiddleware: Middleware {
                 let mediaTypes = request.accept.count > 0 ? request.accept : self.mediaTypes
                 let (mediaType, body) = try serialize(content, mediaTypes: mediaTypes)
                 response.contentType = mediaType
-                response.buffer = body
+                response.body.buffer = body
                 response.contentLength = body.count
             } catch Error.noSuitableSerializer {
                 return Response(status: .notAcceptable)
@@ -164,13 +164,13 @@ public struct ContentNegotiationMiddleware: Middleware {
         if let content = request.content {
             let (mediaType, body) = try serialize(content)
             request.contentType = mediaType
-            request.buffer = body
+            request.body.buffer = body
             request.contentLength = body.count
         }
 
         var response = try chain.respond(request)
 
-        let body = response.buffer
+        let body = response.body.buffer
 
         if let contentType = response.contentType {
             let (_, content) = try parse(body, mediaType: contentType)
