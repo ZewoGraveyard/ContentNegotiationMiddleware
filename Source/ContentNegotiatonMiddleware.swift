@@ -181,8 +181,11 @@ public struct ContentNegotiationMiddleware: Middleware {
     }
 }
 
-public protocol ContentMappable {
+public protocol ContentInitializable {
     init(content: Content) throws
+}
+
+public protocol ContentMappable: ContentInitializable {
     static var key: String { get }
 }
 
@@ -192,17 +195,17 @@ extension ContentMappable {
     }
 }
 
-public protocol ContentConvertible {
+public protocol ContentRepresentable {
     var content: Content { get }
 }
 
-extension ContentConvertible {
+extension ContentRepresentable {
     public static func toContent(convertible: Self) -> Content {
         return convertible.content
     }
 }
 
-extension Collection where Self.Iterator.Element: ContentConvertible {
+extension Collection where Self.Iterator.Element: ContentRepresentable {
     public var contents: [Content] {
         return map(Self.Iterator.Element.toContent)
     }
@@ -262,7 +265,7 @@ extension Request {
         self.content = content
     }
 
-    public init(method: Method = .get, uri: URI = URI(path: "/"), headers: Headers = [:], content convertible: ContentConvertible, upgrade: Upgrade? = nil) {
+    public init(method: Method = .get, uri: URI = URI(path: "/"), headers: Headers = [:], content: ContentRepresentable, upgrade: Upgrade? = nil) {
         self.init(
             method: method,
             uri: uri,
@@ -271,7 +274,7 @@ extension Request {
             upgrade: upgrade
         )
 
-        self.content = convertible.content
+        self.content = content.content
     }
 }
 
@@ -297,7 +300,7 @@ extension Response {
         self.content = content
     }
 
-    public init(status: Status = .ok, headers: Headers = [:], content convertible: ContentConvertible, upgrade: Upgrade? = nil) {
+    public init(status: Status = .ok, headers: Headers = [:], content: ContentRepresentable, upgrade: Upgrade? = nil) {
         self.init(
             status: status,
             headers: headers,
@@ -305,6 +308,6 @@ extension Response {
             upgrade: upgrade
         )
 
-        self.content = convertible.content
+        self.content = content.content
     }
 }
