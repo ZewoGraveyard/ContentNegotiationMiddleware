@@ -24,9 +24,9 @@
 
 @_exported import HTTP
 
-public typealias Content = InterchangeData
-public typealias ContentParser = InterchangeDataParser
-public typealias ContentSerializer = InterchangeDataSerializer
+public typealias Content = StructuredData
+public typealias ContentParser = StructuredDataParser
+public typealias ContentSerializer = StructuredDataSerializer
 
 public struct ContentNegotiationMiddleware: Middleware {
     public let mediaTypes: [MediaType]
@@ -181,31 +181,7 @@ public struct ContentNegotiationMiddleware: Middleware {
     }
 }
 
-public protocol ContentInitializable {
-    init(content: Content) throws
-}
-
-public protocol ContentMappable: ContentInitializable {
-    static var key: String { get }
-}
-
-extension ContentMappable {
-    public static var key: String {
-        return String(reflecting: self)
-    }
-}
-
-public protocol ContentRepresentable {
-    var content: Content { get }
-}
-
-extension ContentRepresentable {
-    public static func toContent(convertible: Self) -> Content {
-        return convertible.content
-    }
-}
-
-extension Collection where Self.Iterator.Element: ContentRepresentable {
+extension Collection where Self.Iterator.Element: StructuredDataRepresentable {
     public var contents: [Content] {
         return map(Self.Iterator.Element.toContent)
     }
@@ -215,32 +191,32 @@ extension Collection where Self.Iterator.Element: ContentRepresentable {
     }
 }
 
-public struct ContentMapperMiddleware: Middleware {
-    let type: ContentMappable.Type
-
-    public init(mappingTo type: ContentMappable.Type) {
-        self.type = type
-    }
-
-    public func respond(request: Request, chain: Responder) throws -> Response {
-        guard let content = request.content else {
-            return try chain.respond(request)
-        }
-
-        var request = request
-
-        do {
-            let target = try type.init(content: content)
-            request.storage[type.key] = target
-        } catch Content.Error.incompatibleType {
-            return Response(status: .badRequest)
-        } catch {
-            throw error
-        }
-
-        return try chain.respond(request)
-    }
-}
+//public struct ContentMapperMiddleware: Middleware {
+//    let type: ContentMappable.Type
+//
+//    public init(mappingTo type: ContentMappable.Type) {
+//        self.type = type
+//    }
+//
+//    public func respond(request: Request, chain: Responder) throws -> Response {
+//        guard let content = request.content else {
+//            return try chain.respond(request)
+//        }
+//
+//        var request = request
+//
+//        do {
+//            let target = try type.init(content: content)
+//            request.storage[type.key] = target
+//        } catch Content.Error.incompatibleType {
+//            return Response(status: .badRequest)
+//        } catch {
+//            throw error
+//        }
+//
+//        return try chain.respond(request)
+//    }
+//}
 
 extension Request {
     public var content: Content? {
