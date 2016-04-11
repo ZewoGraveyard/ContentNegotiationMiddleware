@@ -11,11 +11,7 @@ build/
 DerivedData
 Carthage/
 Packages/
-<<<<<<< HEAD
 *.xcodeproj
-=======
-/*.xcodeproj
->>>>>>> 8ca0ede9f4e3c36545050a43f095ec5070475af8
 
 ## Various settings
 *.pbxuser
