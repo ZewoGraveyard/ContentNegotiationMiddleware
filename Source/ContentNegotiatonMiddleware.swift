@@ -183,7 +183,7 @@ public struct ContentNegotiationMiddleware: Middleware {
 
 extension Collection where Self.Iterator.Element: StructuredDataRepresentable {
     public var contents: [Content] {
-        return map(Self.Iterator.Element.toContent)
+        return map({ $0.structuredData })
     }
 
     public var content: Content {
@@ -241,7 +241,7 @@ extension Request {
         self.content = content
     }
 
-    public init(method: Method = .get, uri: URI = URI(path: "/"), headers: Headers = [:], content: ContentRepresentable, upgrade: Upgrade? = nil) {
+    public init(method: Method = .get, uri: URI = URI(path: "/"), headers: Headers = [:], content: StructuredDataRepresentable, upgrade: Upgrade? = nil) {
         self.init(
             method: method,
             uri: uri,
@@ -250,7 +250,7 @@ extension Request {
             upgrade: upgrade
         )
 
-        self.content = content.content
+        self.content = content.structuredData
     }
 }
 
@@ -276,7 +276,7 @@ extension Response {
         self.content = content
     }
 
-    public init(status: Status = .ok, headers: Headers = [:], content: ContentRepresentable, upgrade: Upgrade? = nil) {
+    public init(status: Status = .ok, headers: Headers = [:], content: StructuredDataRepresentable, upgrade: Upgrade? = nil) {
         self.init(
             status: status,
             headers: headers,
@@ -284,6 +284,6 @@ extension Response {
             upgrade: upgrade
         )
 
-        self.content = content.content
+        self.content = content.structuredData
     }
 }
