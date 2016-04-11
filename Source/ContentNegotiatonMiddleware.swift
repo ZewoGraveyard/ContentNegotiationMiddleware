@@ -112,7 +112,7 @@ public struct ContentNegotiationMiddleware: Middleware {
         }
     }
 
-    public func respond(request: Request, chain: Responder) throws -> Response {
+    public func respond(to request: Request, chainingTo chain: Responder) throws -> Response {
         switch mode {
         case .server:
             return try respondServer(request, chain: chain)
@@ -124,7 +124,7 @@ public struct ContentNegotiationMiddleware: Middleware {
     public func respondServer(request: Request, chain: Responder) throws -> Response {
         var request = request
 
-        let body = request.body.buffer
+        let body = try request.body.becomeBuffer()
 
         if let contentType = request.contentType {
             do {
@@ -137,14 +137,14 @@ public struct ContentNegotiationMiddleware: Middleware {
             }
         }
 
-        var response = try chain.respond(request)
+        var response = try chain.respond(to: request)
 
         if let content = response.content {
             do {
                 let mediaTypes = request.accept.count > 0 ? request.accept : self.mediaTypes
                 let (mediaType, body) = try serialize(content, mediaTypes: mediaTypes)
                 response.contentType = mediaType
-                response.body.buffer = body
+                response.body = .buffer(body)
                 response.contentLength = body.count
             } catch Error.noSuitableSerializer {
                 return Response(status: .notAcceptable)
@@ -164,13 +164,13 @@ public struct ContentNegotiationMiddleware: Middleware {
         if let content = request.content {
             let (mediaType, body) = try serialize(content)
             request.contentType = mediaType
-            request.body.buffer = body
+            request.body = .buffer(body)
             request.contentLength = body.count
         }
 
-        var response = try chain.respond(request)
+        var response = try chain.respond(to: request)
 
-        let body = response.body.buffer
+        let body = try response.body.becomeBuffer()
 
         if let contentType = response.contentType {
             let (_, content) = try parse(body, mediaType: contentType)
