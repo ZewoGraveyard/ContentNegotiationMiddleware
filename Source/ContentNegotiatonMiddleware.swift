@@ -122,8 +122,8 @@ public struct ContentNegotiationMiddleware: Middleware {
         var request = request
 
         let body = try request.body.becomeBuffer()
-
-        if let contentType = request.contentType {
+        
+        if let contentType = request.contentType where !body.isEmpty {
             do {
                 let (_, content) = try parse(body, mediaType: contentType)
                 request.content = content
