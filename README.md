@@ -1,6 +1,6 @@
 # ContentNegotiationMiddleware
 
-```
+```swift
 let contentNegotiation = ContentNegotiationMiddleware(mediaTypes: [JSONMediaType()])
 
 let router = Router(middleware: contentNegotiation) { route in
