@@ -23,10 +23,7 @@
 // SOFTWARE.
 
 @_exported import HTTP
-
-public typealias Content = StructuredData
-public typealias ContentParser = StructuredDataParser
-public typealias ContentSerializer = StructuredDataSerializer
+@_exported import Mapper
 
 public struct ContentNegotiationMiddleware: Middleware {
     public let mediaTypes: [MediaType]
@@ -48,7 +45,7 @@ public struct ContentNegotiationMiddleware: Middleware {
         self.mode = mode
     }
 
-    public func parsersFor(mediaType: MediaType) -> [(MediaType, ContentParser)] {
+    public func parsersFor(mediaType: MediaType) -> [(MediaType, StructuredDataParser)] {
         return mediaTypes.reduce([]) {
             if let serializer = $1.parser where $1.matches(mediaType) {
                 return $0 + [($1, serializer)]
@@ -58,7 +55,7 @@ public struct ContentNegotiationMiddleware: Middleware {
         }
     }
 
-    public func parse(data: Data, mediaType: MediaType) throws -> (MediaType, Content) {
+    public func parse(data: Data, mediaType: MediaType) throws -> (MediaType, StructuredData) {
         var lastError: ErrorProtocol?
 
         for (mediaType, parser) in parsersFor(mediaType) {
@@ -77,7 +74,7 @@ public struct ContentNegotiationMiddleware: Middleware {
         }
     }
 
-    func serializersFor(mediaType: MediaType) -> [(MediaType, ContentSerializer)] {
+    func serializersFor(mediaType: MediaType) -> [(MediaType, StructuredDataSerializer)] {
         return mediaTypes.reduce([]) {
             if let serializer = $1.serializer where $1.matches(mediaType) {
                 return $0 + [($1, serializer)]
@@ -87,11 +84,11 @@ public struct ContentNegotiationMiddleware: Middleware {
         }
     }
 
-    public func serialize(content: Content) throws -> (MediaType, Data) {
+    public func serialize(content: StructuredData) throws -> (MediaType, Data) {
         return try serialize(content, mediaTypes: mediaTypes)
     }
 
-    func serialize(content: Content, mediaTypes: [MediaType]) throws -> (MediaType, Data) {
+    func serialize(content: StructuredData, mediaTypes: [MediaType]) throws -> (MediaType, Data) {
         var lastError: ErrorProtocol?
 
         for acceptedType in mediaTypes {
@@ -182,46 +179,19 @@ public struct ContentNegotiationMiddleware: Middleware {
 }
 
 extension Collection where Self.Iterator.Element: StructuredDataRepresentable {
-    public var contents: [Content] {
+    public var contents: [StructuredData] {
         return map({ $0.structuredData })
     }
 
-    public var content: Content {
-        return Content.from(contents)
+    public var content: StructuredData {
+        return StructuredData.from(contents)
     }
 }
 
-//public struct ContentMapperMiddleware: Middleware {
-//    let type: ContentMappable.Type
-//
-//    public init(mappingTo type: ContentMappable.Type) {
-//        self.type = type
-//    }
-//
-//    public func respond(request: Request, chain: Responder) throws -> Response {
-//        guard let content = request.content else {
-//            return try chain.respond(request)
-//        }
-//
-//        var request = request
-//
-//        do {
-//            let target = try type.init(content: content)
-//            request.storage[type.key] = target
-//        } catch Content.Error.incompatibleType {
-//            return Response(status: .badRequest)
-//        } catch {
-//            throw error
-//        }
-//
-//        return try chain.respond(request)
-//    }
-//}
-
 extension Request {
-    public var content: Content? {
+    public var content: StructuredData? {
         get {
-            return storage["content"] as? Content
+            return storage["content"] as? StructuredData
         }
 
         set(content) {
@@ -229,7 +199,7 @@ extension Request {
         }
     }
 
-    public init(method: Method = .get, uri: URI = URI(path: "/"), headers: Headers = [:], content: Content, upgrade: Upgrade? = nil) {
+    public init(method: Method = .get, uri: URI = URI(path: "/"), headers: Headers = [:], content: StructuredData, upgrade: Upgrade? = nil) {
         self.init(
             method: method,
             uri: uri,
@@ -255,9 +225,9 @@ extension Request {
 }
 
 extension Response {
-    public var content: Content? {
+    public var content: StructuredData? {
         get {
-            return storage["content"] as? Content
+            return storage["content"] as? StructuredData
         }
 
         set(content) {
@@ -265,7 +235,7 @@ extension Response {
         }
     }
 
-    public init(status: Status = .ok, headers: Headers = [:], content: Content, upgrade: Upgrade? = nil) {
+    public init(status: Status = .ok, headers: Headers = [:], content: StructuredData, upgrade: Upgrade? = nil) {
         self.init(
             status: status,
             headers: headers,
