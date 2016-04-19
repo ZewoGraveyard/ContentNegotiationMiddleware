@@ -45,9 +45,9 @@ public struct ContentNegotiationMiddleware: Middleware {
         self.mode = mode
     }
 
-    public func parsersFor(mediaType: MediaType) -> [(MediaType, StructuredDataParser)] {
+    public func parsersFor(_ mediaType: MediaType) -> [(MediaType, StructuredDataParser)] {
         return mediaTypes.reduce([]) {
-            if let serializer = $1.parser where $1.matches(mediaType) {
+            if let serializer = $1.parser where $1.matches(other: mediaType) {
                 return $0 + [($1, serializer)]
             } else {
                 return $0
@@ -55,7 +55,7 @@ public struct ContentNegotiationMiddleware: Middleware {
         }
     }
 
-    public func parse(data: Data, mediaType: MediaType) throws -> (MediaType, StructuredData) {
+    public func parse(_ data: Data, mediaType: MediaType) throws -> (MediaType, StructuredData) {
         var lastError: ErrorProtocol?
 
         for (mediaType, parser) in parsersFor(mediaType) {
@@ -74,9 +74,9 @@ public struct ContentNegotiationMiddleware: Middleware {
         }
     }
 
-    func serializersFor(mediaType: MediaType) -> [(MediaType, StructuredDataSerializer)] {
+    func serializersFor(_ mediaType: MediaType) -> [(MediaType, StructuredDataSerializer)] {
         return mediaTypes.reduce([]) {
-            if let serializer = $1.serializer where $1.matches(mediaType) {
+            if let serializer = $1.serializer where $1.matches(other: mediaType) {
                 return $0 + [($1, serializer)]
             } else {
                 return $0
@@ -84,11 +84,11 @@ public struct ContentNegotiationMiddleware: Middleware {
         }
     }
 
-    public func serialize(content: StructuredData) throws -> (MediaType, Data) {
+    public func serialize(_ content: StructuredData) throws -> (MediaType, Data) {
         return try serialize(content, mediaTypes: mediaTypes)
     }
 
-    func serialize(content: StructuredData, mediaTypes: [MediaType]) throws -> (MediaType, Data) {
+    func serialize(_ content: StructuredData, mediaTypes: [MediaType]) throws -> (MediaType, Data) {
         var lastError: ErrorProtocol?
 
         for acceptedType in mediaTypes {
@@ -118,7 +118,7 @@ public struct ContentNegotiationMiddleware: Middleware {
         }
     }
 
-    public func respondServer(request: Request, chain: Responder) throws -> Response {
+    public func respondServer(_ request: Request, chain: Responder) throws -> Response {
         var request = request
 
         let body = try request.body.becomeBuffer()
@@ -153,7 +153,7 @@ public struct ContentNegotiationMiddleware: Middleware {
         return response
     }
 
-    public func respondClient(request: Request, chain: Responder) throws -> Response {
+    public func respondClient(_ request: Request, chain: Responder) throws -> Response {
         var request = request
 
         request.accept = mediaTypes
