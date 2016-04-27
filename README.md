@@ -6,6 +6,7 @@
 [![License][mit-badge]][mit-url]
 [![Slack][slack-badge]][slack-url]
 [![Travis][travis-badge]][travis-url]
+[![Codebeat][codebeat-badge]][codebeat-url]
 
 ## Usage
 
@@ -32,7 +33,7 @@ import PackageDescription
 
 let package = Package(
     dependencies: [
-        .Package(url: "https://github.com/Zewo/ContentNegotiationMiddleware.git", majorVersion: 0, minor: 5)
+        .Package(url: "https://github.com/Zewo/ContentNegotiationMiddleware.git", majorVersion: 0, minor: 5),
     ]
 )
 ```
@@ -64,3 +65,5 @@ This project is released under the MIT license. See [LICENSE](LICENSE) for detai
 [slack-url]: http://slack.zewo.io
 [travis-badge]: https://travis-ci.org/Zewo/ContentNegotiationMiddleware.svg?branch=master
 [travis-url]: https://travis-ci.org/Zewo/ContentNegotiationMiddleware
+[codebeat-badge]: https://codebeat.co/badges/8aa29a99-d9ff-40e3-beff-f3b5a181a575
+[codebeat-url]: https://codebeat.co/projects/github-com-zewo-contentnegotiationmiddleware
