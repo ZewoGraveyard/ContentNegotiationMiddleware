@@ -178,16 +178,6 @@ public struct ContentNegotiationMiddleware: Middleware {
     }
 }
 
-extension Collection where Self.Iterator.Element: StructuredDataRepresentable {
-    public var contents: [StructuredData] {
-        return map({ $0.structuredData })
-    }
-
-    public var content: StructuredData {
-        return StructuredData.from(contents)
-    }
-}
-
 extension Request {
     public var content: StructuredData? {
         get {
