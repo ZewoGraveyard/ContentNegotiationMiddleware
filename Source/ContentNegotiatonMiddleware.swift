@@ -122,7 +122,7 @@ public struct ContentNegotiationMiddleware: Middleware {
         var request = request
 
         let body = try request.body.becomeBuffer()
-        
+
         if let contentType = request.contentType where !body.isEmpty {
             do {
                 let (_, content) = try parse(body, mediaType: contentType)
@@ -189,25 +189,25 @@ extension Request {
         }
     }
 
-    public init(method: Method = .get, uri: URI = URI(path: "/"), headers: Headers = [:], content: StructuredData, upgrade: Upgrade? = nil) {
+    public init(method: Method = .get, uri: URI = URI(path: "/"), headers: Headers = [:], content: StructuredData, didUpgrade: DidUpgrade? = nil) {
         self.init(
             method: method,
             uri: uri,
             headers: headers,
             body: [],
-            upgrade: upgrade
+            didUpgrade: didUpgrade
         )
 
         self.content = content
     }
 
-    public init(method: Method = .get, uri: URI = URI(path: "/"), headers: Headers = [:], content: StructuredDataRepresentable, upgrade: Upgrade? = nil) {
+    public init(method: Method = .get, uri: URI = URI(path: "/"), headers: Headers = [:], content: StructuredDataRepresentable, didUpgrade: DidUpgrade? = nil) {
         self.init(
             method: method,
             uri: uri,
             headers: headers,
             body: [],
-            upgrade: upgrade
+            didUpgrade: didUpgrade
         )
 
         self.content = content.structuredData
@@ -225,23 +225,23 @@ extension Response {
         }
     }
 
-    public init(status: Status = .ok, headers: Headers = [:], content: StructuredData, upgrade: Upgrade? = nil) {
+    public init(status: Status = .ok, headers: Headers = [:], content: StructuredData, didUpgrade: DidUpgrade? = nil) {
         self.init(
             status: status,
             headers: headers,
             body: [],
-            upgrade: upgrade
+            didUpgrade: didUpgrade
         )
 
         self.content = content
     }
 
-    public init(status: Status = .ok, headers: Headers = [:], content: StructuredDataRepresentable, upgrade: Upgrade? = nil) {
+    public init(status: Status = .ok, headers: Headers = [:], content: StructuredDataRepresentable, didUpgrade: DidUpgrade? = nil) {
         self.init(
             status: status,
             headers: headers,
             body: [],
-            upgrade: upgrade
+            didUpgrade: didUpgrade
         )
 
         self.content = content.structuredData
