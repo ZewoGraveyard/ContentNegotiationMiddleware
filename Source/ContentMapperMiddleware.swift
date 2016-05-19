@@ -32,6 +32,16 @@ extension ContentMappable {
     }
 }
 
+extension Array where Element: StructuredDataRepresentable {
+    public var contents: [StructuredData] {
+        return self.map({$0.structuredData})
+    }
+
+    public var content: StructuredData {
+        return .arrayValue(contents)
+    }
+}
+
 public struct ContentMapperMiddleware: Middleware {
     let type: ContentMappable.Type
 
