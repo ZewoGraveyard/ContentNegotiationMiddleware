@@ -8,7 +8,7 @@ class ContentNegotiationMiddlewareTests: XCTestCase {
 }
 
 extension ContentNegotiationMiddlewareTests {
-    static var allTests: [(String, ContentNegotiationMiddlewareTests -> () throws -> Void)] {
+    static var allTests: [(String, (ContentNegotiationMiddlewareTests) -> () throws -> Void)] {
         return [
            ("testReality", testReality),
         ]
