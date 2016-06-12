@@ -40,6 +40,10 @@ public struct ContentNegotiationMiddleware: Middleware {
         case mediaTypeNotFound
     }
 
+    public init(types: MediaType..., mode: Mode = .server) {
+        self.init(mediaTypes: types, mode: mode)
+    }
+
     public init(mediaTypes: [MediaType], mode: Mode = .server) {
         self.mediaTypes = mediaTypes
         self.mode = mode
