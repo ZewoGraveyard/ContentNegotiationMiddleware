@@ -22,20 +22,16 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-public protocol ContentMappable: Mappable {
-    static var key: String { get }
-}
-
-extension ContentMappable {
+extension StructuredDataInitializable {
     public static var key: String {
         return String(reflecting: self)
     }
 }
 
 public struct ContentMapperMiddleware: Middleware {
-    let type: ContentMappable.Type
+    let type: StructuredDataInitializable.Type
 
-    public init(mappingTo type: ContentMappable.Type) {
+    public init(mappingTo type: StructuredDataInitializable.Type) {
         self.type = type
     }
 
@@ -49,7 +45,7 @@ public struct ContentMapperMiddleware: Middleware {
         do {
             let target = try type.init(structuredData: content)
             request.storage[type.key] = target
-        } catch StructuredData.Error.incompatibleType {
+        } catch StructuredDataError.incompatibleType {
             return Response(status: .badRequest)
         } catch {
             throw error

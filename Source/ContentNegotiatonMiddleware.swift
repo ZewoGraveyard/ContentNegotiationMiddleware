@@ -25,38 +25,43 @@
 @_exported import HTTP
 @_exported import Mapper
 
+public enum ContentNegotiationMiddlewareError: ErrorProtocol {
+    case noSuitableParser
+    case noSuitableSerializer
+}
+
 public struct ContentNegotiationMiddleware: Middleware {
-    public let mediaTypes: [MediaType]
+    public let types: [MediaTypeRepresentor.Type]
     public let mode: Mode
+
+    public var mediaTypes: [MediaType] {
+        return types.map({$0.mediaType})
+    }
 
     public enum Mode {
         case server
         case client
     }
 
-    public enum Error: ErrorProtocol {
-        case noSuitableParser
-        case noSuitableSerializer
-        case mediaTypeNotFound
-    }
-
-    public init(types: MediaType..., mode: Mode = .server) {
-        self.init(mediaTypes: types, mode: mode)
-    }
-
-    public init(mediaTypes: [MediaType], mode: Mode = .server) {
-        self.mediaTypes = mediaTypes
+    public init(mediaTypes: [MediaTypeRepresentor.Type], mode: Mode = .server) {
+        self.types = mediaTypes
         self.mode = mode
     }
 
+    public init(mediaTypes: MediaTypeRepresentor.Type..., mode: Mode = .server) {
+        self.init(mediaTypes: mediaTypes, mode: mode)
+    }
+
     public func parsersFor(_ mediaType: MediaType) -> [(MediaType, StructuredDataParser)] {
-        return mediaTypes.reduce([]) {
-            if let serializer = $1.parser where $1.matches(other: mediaType) {
-                return $0 + [($1, serializer)]
-            } else {
-                return $0
+        var parsers: [(MediaType, StructuredDataParser)] = []
+
+        for type in types {
+            if type.mediaType.matches(other: mediaType) {
+                parsers.append(type.mediaType, type.parser)
             }
         }
+
+        return parsers
     }
 
     public func parse(_ data: Data, mediaType: MediaType) throws -> (MediaType, StructuredData) {
@@ -74,18 +79,20 @@ public struct ContentNegotiationMiddleware: Middleware {
         if let lastError = lastError {
             throw lastError
         } else {
-            throw Error.noSuitableParser
+            throw ContentNegotiationMiddlewareError.noSuitableParser
         }
     }
 
     func serializersFor(_ mediaType: MediaType) -> [(MediaType, StructuredDataSerializer)] {
-        return mediaTypes.reduce([]) {
-            if let serializer = $1.serializer where $1.matches(other: mediaType) {
-                return $0 + [($1, serializer)]
-            } else {
-                return $0
+        var serializers: [(MediaType, StructuredDataSerializer)] = []
+
+        for type in types {
+            if type.mediaType.matches(other: mediaType) {
+                serializers.append(type.mediaType, type.serializer)
             }
         }
+
+        return serializers
     }
 
     public func serialize(_ content: StructuredData) throws -> (MediaType, Data) {
@@ -109,7 +116,7 @@ public struct ContentNegotiationMiddleware: Middleware {
         if let lastError = lastError {
             throw lastError
         } else {
-            throw Error.noSuitableSerializer
+            throw ContentNegotiationMiddlewareError.noSuitableSerializer
         }
     }
 
@@ -131,10 +138,8 @@ public struct ContentNegotiationMiddleware: Middleware {
             do {
                 let (_, content) = try parse(body, mediaType: contentType)
                 request.content = content
-            } catch Error.noSuitableParser {
-                return Response(status: .unsupportedMediaType)
-            } catch {
-                return Response(status: .badRequest)
+            } catch ContentNegotiationMiddlewareError.noSuitableParser {
+                throw ClientError.unsupportedMediaType
             }
         }
 
@@ -144,13 +149,12 @@ public struct ContentNegotiationMiddleware: Middleware {
             do {
                 let mediaTypes = request.accept.count > 0 ? request.accept : self.mediaTypes
                 let (mediaType, body) = try serialize(content, mediaTypes: mediaTypes)
+                response.content = nil
                 response.contentType = mediaType
                 response.body = .buffer(body)
                 response.contentLength = body.count
-            } catch Error.noSuitableSerializer {
-                return Response(status: .notAcceptable)
-            } catch {
-                return Response(status: .internalServerError)
+            } catch ContentNegotiationMiddlewareError.noSuitableSerializer {
+                throw ClientError.notAcceptable
             }
         }
 
@@ -182,72 +186,24 @@ public struct ContentNegotiationMiddleware: Middleware {
     }
 }
 
-extension Request {
-    public var content: StructuredData? {
-        get {
-            return storage["content"] as? StructuredData
+extension Body {
+    mutating func becomeBuffer(timingOut deadline: Double = .never) throws -> Data {
+        switch self {
+        case .buffer(let data):
+            return data
+        case .receiver(let receiver):
+            let data = Drain(for: receiver, timingOut: deadline).data
+            self = .buffer(data)
+            return data
+        case .sender(let sender):
+            let drain = Drain()
+            try sender(drain)
+            let data = drain.data
+
+            self = .buffer(data)
+            return data
+        default:
+            throw BodyError.inconvertibleType
         }
-
-        set(content) {
-            storage["content"] = content
-        }
-    }
-
-    public init(method: Method = .get, uri: URI = URI(path: "/"), headers: Headers = [:], content: StructuredData, didUpgrade: DidUpgrade? = nil) {
-        self.init(
-            method: method,
-            uri: uri,
-            headers: headers,
-            body: [],
-            didUpgrade: didUpgrade
-        )
-
-        self.content = content
-    }
-
-    public init(method: Method = .get, uri: URI = URI(path: "/"), headers: Headers = [:], content: StructuredDataRepresentable, didUpgrade: DidUpgrade? = nil) {
-        self.init(
-            method: method,
-            uri: uri,
-            headers: headers,
-            body: [],
-            didUpgrade: didUpgrade
-        )
-
-        self.content = content.structuredData
-    }
-}
-
-extension Response {
-    public var content: StructuredData? {
-        get {
-            return storage["content"] as? StructuredData
-        }
-
-        set(content) {
-            storage["content"] = content
-        }
-    }
-
-    public init(status: Status = .ok, headers: Headers = [:], content: StructuredData, didUpgrade: DidUpgrade? = nil) {
-        self.init(
-            status: status,
-            headers: headers,
-            body: [],
-            didUpgrade: didUpgrade
-        )
-
-        self.content = content
-    }
-
-    public init(status: Status = .ok, headers: Headers = [:], content: StructuredDataRepresentable, didUpgrade: DidUpgrade? = nil) {
-        self.init(
-            status: status,
-            headers: headers,
-            body: [],
-            didUpgrade: didUpgrade
-        )
-
-        self.content = content.structuredData
     }
 }
